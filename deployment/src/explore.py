@@ -86,7 +86,7 @@ class ExplorationNode(Node):
                 # init scheduler
                 noise_scheduler.set_timesteps(num_diffusion_iters)
 
-                start_time = time.time()
+                start_time = self.get_clock().now()
                 for k in noise_scheduler.timesteps[:]:
                     # predict noise
                     noise_pred = model(
@@ -102,7 +102,8 @@ class ExplorationNode(Node):
                         timestep=k,
                         sample=naction
                     ).prev_sample
-                print("time elapsed:", time.time() - start_time)
+                elapsed_time = (self.get_clock().now() - start_time).nanoseconds / 1e9
+                print("time elapsed:", elapsed_time)
 
             naction = to_numpy(get_action(naction)) # 8 x 8 x 2
             flatten_naction = naction.flatten()
