@@ -18,7 +18,7 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=~/.ros/fastdds.xml
 
 Check if ros2 bridge is enabled
 
-create a subscriber to twist and articulationcontroller
+create a subscriber to vhub and steering and send to articulationcontroller
 
 create a camera image publisher
 

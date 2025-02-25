@@ -6,7 +6,7 @@ from typing import Tuple
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray, Bool
+from std_msgs.msg import Float32MultiArray, Bool, Float64MultiArray
 
 from topic_names import (WAYPOINT_TOPIC, 
                          REACHED_GOAL_TOPIC)
@@ -75,6 +75,38 @@ def callback_reached_goal(reached_goal_msg: Bool):
 	global reached_goal
 	reached_goal = reached_goal_msg.data
 
+WHEELBASE = 0.75
+WHEEL_RADIUS = 0.125 
+HUB_WHEEL_RADIUS = 0.18 
+
+def compute_hub_steering(v, w):
+    if v > 0:
+        v_hub = (
+            np.hypot(v, w * WHEELBASE)
+            / HUB_WHEEL_RADIUS
+        )
+    elif v < 0:
+        v_hub = (
+            -np.hypot(v, w * WHEELBASE)
+            / HUB_WHEEL_RADIUS
+        )
+    else:
+        # if the linear velocity is zero then it could be an in place turn
+        v_hub = w * WHEELBASE / HUB_WHEEL_RADIUS
+
+    if w != 0:
+        # compute the radius of curvature
+        r = v / w  # in m
+        if r != 0:  # normal turn
+            steering = np.arctan(WHEELBASE / r)  # in rad
+        else:  # for in place turn we always turn right and then change the sign of the hub velocity
+            steering = np.pi / 2  # in rad
+
+    # Second case: it's a straight line
+    else:
+        steering = 0  # in rad
+    
+    return v_hub, steering
 
 class PDControllerNode(Node):
     def __init__(self):
@@ -98,6 +130,9 @@ class PDControllerNode(Node):
         # Publisher
         self.vel_out = self.create_publisher(Twist, VEL_TOPIC, 10)
         
+        self.drive_out_vhub = self.create_publisher(Float64MultiArray, "/vhub_command", 10)
+        self.drive_out_steering = self.create_publisher(Float64MultiArray, "/steering_command", 10)
+
         # Timer for periodic execution (using ROS 2 timer)
         self.create_timer(1.0 / RATE, self.timer_callback)
         self.get_logger().info("PD Controller Node started.")
@@ -118,6 +153,13 @@ class PDControllerNode(Node):
             self.get_logger().info(f"publishing new vel: {v}, {w}")
             self.vel_out.publish(vel_msg)
 
+            v_hub, steering = compute_hub_steering(v, w)
+            v_hub_msg = Float64MultiArray()
+            v_hub_msg.data = [v_hub] # should be degree/s
+            steering_msg = Float64MultiArray()
+            steering_msg.data = [steering] # should be degree
+            self.drive_out_vhub.publish(v_hub_msg)
+            self.drive_out_steering.publish(steering_msg)
 
 def main(args=None):
     rclpy.init(args=args)
