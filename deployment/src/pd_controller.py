@@ -2,20 +2,21 @@ import numpy as np
 import yaml
 from typing import Tuple
 
-# ROS
-import rospy
+# ROS 2
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray, Bool
 
 from topic_names import (WAYPOINT_TOPIC, 
-			 			REACHED_GOAL_TOPIC)
+                         REACHED_GOAL_TOPIC)
 from ros_data import ROSData
 from utils import clip_angle
 
 # CONSTS
 CONFIG_PATH = "../config/robot.yaml"
 with open(CONFIG_PATH, "r") as f:
-	robot_config = yaml.safe_load(f)
+    robot_config = yaml.safe_load(f)
 MAX_V = robot_config["max_v"]
 MAX_W = robot_config["max_w"]
 VEL_TOPIC = robot_config["vel_navi_topic"]
@@ -75,30 +76,54 @@ def callback_reached_goal(reached_goal_msg: Bool):
 	reached_goal = reached_goal_msg.data
 
 
-def main():
-	global vel_msg, reverse_mode
-	rospy.init_node("PD_CONTROLLER", anonymous=False)
-	waypoint_sub = rospy.Subscriber(WAYPOINT_TOPIC, Float32MultiArray, callback_drive, queue_size=1)
-	reached_goal_sub = rospy.Subscriber(REACHED_GOAL_TOPIC, Bool, callback_reached_goal, queue_size=1)
-	vel_out = rospy.Publisher(VEL_TOPIC, Twist, queue_size=1)
-	rate = rospy.Rate(RATE)
-	print("Registered with master node. Waiting for waypoints...")
-	while not rospy.is_shutdown():
-		vel_msg = Twist()
-		if reached_goal:
-			vel_out.publish(vel_msg)
-			print("Reached goal! Stopping...")
-			return
-		elif waypoint.is_valid(verbose=True):
-			v, w = pd_controller(waypoint.get())
-			if reverse_mode:
-				v *= -1
-			vel_msg.linear.x = v
-			vel_msg.angular.z = w
-			print(f"publishing new vel: {v}, {w}")
-		vel_out.publish(vel_msg)
-		rate.sleep()
-	
+class PDControllerNode(Node):
+    def __init__(self):
+        super().__init__('pd_controller')
+        
+        # Subscribers
+        self.waypoint_sub = self.create_subscription(
+            Float32MultiArray,
+            WAYPOINT_TOPIC,
+            callback_drive,
+            10  # Queue size
+        )
+        
+        self.reached_goal_sub = self.create_subscription(
+            Bool,
+            REACHED_GOAL_TOPIC,
+            callback_reached_goal,
+            10  # Queue size
+        )
+
+        # Publisher
+        self.vel_out = self.create_publisher(Twist, VEL_TOPIC, 10)
+        
+        # Timer for periodic execution (using ROS 2 timer)
+        self.create_timer(1.0 / RATE, self.timer_callback)
+        self.get_logger().info("PD Controller Node started.")
+
+    def timer_callback(self):
+        global vel_msg, reverse_mode
+        if reached_goal:
+            vel_msg = Twist()  # Stop the robot
+            self.vel_out.publish(vel_msg)
+            self.get_logger().info("Reached goal! Stopping...")
+            rclpy.shutdown()  # Shutdown ROS 2 node
+        elif waypoint.is_valid(verbose=True):
+            v, w = pd_controller(waypoint.get())
+            if reverse_mode:
+                v *= -1
+            vel_msg.linear.x = v
+            vel_msg.angular.z = w
+            self.get_logger().info(f"publishing new vel: {v}, {w}")
+            self.vel_out.publish(vel_msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PDControllerNode()
+    rclpy.spin(node)  # Keep the node running
+    rclpy.shutdown()
 
 if __name__ == '__main__':
 	main()

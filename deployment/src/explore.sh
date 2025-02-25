@@ -16,7 +16,7 @@ tmux selectp -t 0    # go back to the first pane
 
 # Run the roslaunch command in the first pane
 tmux select-pane -t 0
-tmux send-keys "roslaunch vint_locobot.launch" Enter
+tmux send-keys "ros2 topic list" Enter
 
 # Run the navigate.py script with command line args in the second pane
 tmux select-pane -t 1
@@ -26,7 +26,7 @@ tmux send-keys "python explore.py $@" Enter
 # Run the teleop.py script in the third pane
 tmux select-pane -t 2
 # tmux send-keys "conda activate vint_deployment" Enter
-tmux send-keys "python joy_teleop.py" Enter
+tmux send-keys "ros2 run teleop_twist_keyboard teleop_twist_keyboard" Enter
 
 # Run the pd_controller.py script in the fourth pane
 tmux select-pane -t 3
