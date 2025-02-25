@@ -1,0 +1,30 @@
+Isaac Sim Machine
+
+Ubuntu 22.04
+ROS2 Humble Installation
+
+Download ROS 2 following the instructions on the official website:
+https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
+
+source /opt/ros/humble/setup.bash
+
+https://docs.omniverse.nvidia.com/isaacsim/latest/installation/install_ros.html#isaac-sim-app-enable-ros:~:text=If%20you%20are%20not%20using%20a%20Isaac%20Sim%20ROS%202%20Workspace%2C%20create%20a%20file%20named%20fastdds.xml%20under%20~/.ros/%2C%20paste%20the%20following%20snippet%20link%20into%20the%20file%3A
+
+unset LD_LIBRARY_PATH
+
+export FASTRTPS_DEFAULT_PROFILES_FILE=~/.ros/fastdds.xml
+
+./isaac-sim.sh
+
+Check if ros2 bridge is enabled
+
+create a subscriber to twist and articulationcontroller
+
+create a camera image publisher
+
+Now on playing if ros omnigraph is setup 
+then ros messages should be published and ros topics can be seen with
+ros2 topic list
+
+rviz2
+
