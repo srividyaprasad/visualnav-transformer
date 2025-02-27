@@ -20,8 +20,8 @@ tmux send-keys "ros2 topic list" Enter
 
 # Run the navigate.py script with command line args in the second pane
 tmux select-pane -t 1
-# tmux send-keys "conda activate vint_deployment" Enter
-tmux send-keys "python explore.py $@" Enter
+#tmux send-keys "source ../../.venv/bin/activate" Enter
+tmux send-keys "python explore.py --model $@" Enter
 
 # Run the teleop.py script in the third pane
 tmux select-pane -t 2
@@ -30,7 +30,7 @@ tmux send-keys "ros2 run teleop_twist_keyboard teleop_twist_keyboard" Enter
 
 # Run the pd_controller.py script in the fourth pane
 tmux select-pane -t 3
-tmux send-keys "conda activate vint_deployment" Enter
+# tmux send-keys "conda activate vint_deployment" Enter
 tmux send-keys "python pd_controller.py" Enter
 
 # Attach to the tmux session

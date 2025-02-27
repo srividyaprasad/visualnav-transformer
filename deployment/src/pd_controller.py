@@ -19,7 +19,7 @@ with open(CONFIG_PATH, "r") as f:
     robot_config = yaml.safe_load(f)
 MAX_V = robot_config["max_v"]
 MAX_W = robot_config["max_w"]
-VEL_TOPIC = robot_config["vel_navi_topic"]
+VEL_TOPIC = "/cmd_vel" # robot_config["vel_navi_topic"]
 DT = 1/robot_config["frame_rate"]
 RATE = 9
 EPS = 1e-8
@@ -29,6 +29,7 @@ FLIP_ANG_VEL = np.pi/4
 # GLOBALS
 vel_msg = Twist()
 waypoint = ROSData(WAYPOINT_TIMEOUT, name="waypoint")
+
 reached_goal = False
 reverse_mode = False
 current_yaw = None
@@ -67,6 +68,7 @@ def callback_drive(waypoint_msg: Float32MultiArray):
 	"""Callback function for the waypoint subscriber"""
 	global vel_msg
 	print("seting waypoint")
+	print(waypoint_msg.data)
 	waypoint.set(waypoint_msg.data)
 	
 	
@@ -75,38 +77,9 @@ def callback_reached_goal(reached_goal_msg: Bool):
 	global reached_goal
 	reached_goal = reached_goal_msg.data
 
-WHEELBASE = 0.75
-WHEEL_RADIUS = 0.125 
-HUB_WHEEL_RADIUS = 0.18 
-
-def compute_hub_steering(v, w):
-    if v > 0:
-        v_hub = (
-            np.hypot(v, w * WHEELBASE)
-            / HUB_WHEEL_RADIUS
-        )
-    elif v < 0:
-        v_hub = (
-            -np.hypot(v, w * WHEELBASE)
-            / HUB_WHEEL_RADIUS
-        )
-    else:
-        # if the linear velocity is zero then it could be an in place turn
-        v_hub = w * WHEELBASE / HUB_WHEEL_RADIUS
-
-    if w != 0:
-        # compute the radius of curvature
-        r = v / w  # in m
-        if r != 0:  # normal turn
-            steering = np.arctan(WHEELBASE / r)  # in rad
-        else:  # for in place turn we always turn right and then change the sign of the hub velocity
-            steering = np.pi / 2  # in rad
-
-    # Second case: it's a straight line
-    else:
-        steering = 0  # in rad
-    
-    return v_hub, steering
+WHEELBASE = 0.5
+WHEEL_RADIUS = 0.1
+HUB_WHEEL_RADIUS = 0.1
 
 class PDControllerNode(Node):
     def __init__(self):
@@ -129,10 +102,7 @@ class PDControllerNode(Node):
 
         # Publisher
         self.vel_out = self.create_publisher(Twist, VEL_TOPIC, 10)
-        
-        self.drive_out_vhub = self.create_publisher(Float64MultiArray, "/vhub_command", 10)
-        self.drive_out_steering = self.create_publisher(Float64MultiArray, "/steering_command", 10)
-
+        print('Created cmd vel publisher')
         # Timer for periodic execution (using ROS 2 timer)
         self.create_timer(1.0 / RATE, self.timer_callback)
         self.get_logger().info("PD Controller Node started.")
@@ -145,21 +115,15 @@ class PDControllerNode(Node):
             self.get_logger().info("Reached goal! Stopping...")
             rclpy.shutdown()  # Shutdown ROS 2 node
         elif waypoint.is_valid(verbose=True):
+            print('Way point is valid')
             v, w = pd_controller(waypoint.get())
+            print(v, w)
             if reverse_mode:
                 v *= -1
             vel_msg.linear.x = v
             vel_msg.angular.z = w
             self.get_logger().info(f"publishing new vel: {v}, {w}")
             self.vel_out.publish(vel_msg)
-
-            v_hub, steering = compute_hub_steering(v, w)
-            v_hub_msg = Float64MultiArray()
-            v_hub_msg.data = [v_hub] # should be degree/s
-            steering_msg = Float64MultiArray()
-            steering_msg.data = [steering] # should be degree
-            self.drive_out_vhub.publish(v_hub_msg)
-            self.drive_out_steering.publish(steering_msg)
 
 def main(args=None):
     rclpy.init(args=args)
