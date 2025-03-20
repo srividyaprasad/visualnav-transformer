@@ -1,14 +1,15 @@
 import argparse
 import os
-from utils import msg_to_pil 
+import shutil
+from utils import msg_to_pil
 import time
-
-# ROS
-import rospy
+import rclpy
+from rclpy.node import Node
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Twist
 
-IMAGE_TOPIC = "/usb_cam/image_raw"
+IMAGE_TOPIC = "/sim_camera/rgb"
 TOPOMAP_IMAGES_DIR = "../topomaps/images"
 obs_img = None
 
@@ -25,49 +26,67 @@ def remove_files_in_dir(dir_path: str):
             print("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
-def callback_obs(msg: Image):
-    global obs_img
-    obs_img = msg_to_pil(msg)
+class TopomapCreatorNode(Node):
+    def __init__(self, dir_path: str, dt: float):
+        super().__init__('create_topomap')
+        self.dir_path = dir_path
+        self.dt = dt
+        self.obs_img = None
+        self.i = 0
+        self.start_time = float("inf")
 
+        # Subscriber to image topic
+        self.create_subscription(Image, IMAGE_TOPIC, self.callback_obs, 10)
+        # Publisher to subgoal topic
+        self.subgoals_pub = self.create_publisher(Image, '/subgoals', 10)
+        # Subscriber to joystick topic
+        # self.create_subscription(Joy, "joy", self.callback_joy, 10)
+        self.create_subscription(Twist, "teleop/keyboard", self.callback_teleop, 10)
 
-def callback_joy(msg: Joy):
-    if msg.buttons[0]:
-        rospy.signal_shutdown("shutdown")
+        # Timer to check for inactivity
+        self.create_timer(self.dt, self.timer_callback)
+
+        self.topomap_name_dir = os.path.join(TOPOMAP_IMAGES_DIR, self.dir_path)
+        if not os.path.isdir(self.topomap_name_dir):
+            os.makedirs(self.topomap_name_dir)
+        else:
+            self.get_logger().info(f"{self.topomap_name_dir} already exists. Removing previous images...")
+            remove_files_in_dir(self.topomap_name_dir)
+
+    def callback_obs(self, msg: Image):
+        global obs_img
+        self.obs_img = msg_to_pil(msg)
+
+    def callback_teleop(self, msg: Twist):
+        if msg.linear.x == 0.0 and msg.linear.y == 0.0 and msg.linear.z == 0.0 and msg.angular.x == 0.0 and msg.angular.y == 0.0 and msg.angular.z == 0.0:
+            rclpy.shutdown()
+
+    def timer_callback(self):
+        global obs_img
+        if self.obs_img is not None:
+            self.obs_img.save(os.path.join(self.topomap_name_dir, f"{self.i}.png"))
+            self.get_logger().info(f"Published image {self.i}")
+            self.i += 1
+            self.start_time = time.time()
+            self.obs_img = None
+
+        if time.time() - self.start_time > 2 * self.dt:
+            self.get_logger().warning(f"Topic {IMAGE_TOPIC} not publishing anymore. Shutting down...")
+            rclpy.shutdown()
 
 
 def main(args: argparse.Namespace):
-    global obs_img
-    rospy.init_node("CREATE_TOPOMAP", anonymous=False)
-    image_curr_msg = rospy.Subscriber(
-        IMAGE_TOPIC, Image, callback_obs, queue_size=1)
-    subgoals_pub = rospy.Publisher(
-        "/subgoals", Image, queue_size=1)
-    joy_sub = rospy.Subscriber("joy", Joy, callback_joy)
+    rclpy.init(args=args)
 
-    topomap_name_dir = os.path.join(TOPOMAP_IMAGES_DIR, args.dir)
-    if not os.path.isdir(topomap_name_dir):
-        os.makedirs(topomap_name_dir)
-    else:
-        print(f"{topomap_name_dir} already exists. Removing previous images...")
-        remove_files_in_dir(topomap_name_dir)
-        
+    topomap_creator_node = TopomapCreatorNode(args.dir, args.dt)
 
-    assert args.dt > 0, "dt must be positive"
-    rate = rospy.Rate(1/args.dt)
-    print("Registered with master node. Waiting for images...")
-    i = 0
-    start_time = float("inf")
-    while not rospy.is_shutdown():
-        if obs_img is not None:
-            obs_img.save(os.path.join(topomap_name_dir, f"{i}.png"))
-            print("published image", i)
-            i += 1
-            rate.sleep()
-            start_time = time.time()
-            obs_img = None
-        if time.time() - start_time > 2 * args.dt:
-            print(f"Topic {IMAGE_TOPIC} not publishing anymore. Shutting down...")
-            rospy.signal_shutdown("shutdown")
+    try:
+        rclpy.spin(topomap_creator_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        topomap_creator_node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
@@ -84,9 +103,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dt",
         "-t",
-        default=1.,
+        default=1.0,
         type=float,
-        help=f"time between images sampled from the {IMAGE_TOPIC} topic (default: 3.0)",
+        help=f"time between images sampled from the {IMAGE_TOPIC} topic (default: 1.0)",
     )
     args = parser.parse_args()
 
