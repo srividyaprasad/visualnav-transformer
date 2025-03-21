@@ -7,7 +7,7 @@ from datetime import datetime
 
 OUTPUT_IMG_PATH = '../output_imgs'
 
-output_video_path = f"{OUTPUT_IMG_PATH}/output_video_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.mp4"  # Output video file path
+output_video_path = f"{OUTPUT_IMG_PATH}/navigate_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.mp4"  # Output video file path
 frame_width = 1280  # Width of the frame
 frame_height = 720  # Height of the frame
 fps = 30  # Frames per second, adjust as necessary
@@ -45,9 +45,13 @@ def visualize_network_action(img, actions, frame_id=0):
         img = np.array(img)
 
     # --- Camera Intrinsic Parameters (example values) ---
+    # K = np.array([[ 1438.5902099609375, 0.0, 962.24627685546875], 
+    #               [ 0.0, 1438.5902099609375, 722.44140625], 
+    #               [ 0.0, 0.0, 1.0]], dtype=np.float32)
     K = np.array([[ 617.54, 0.0, 318.655], 
-                  [ 0.0, 617.5625, 244.1013], 
-                  [ 0.0, 0.0, 1.0]], dtype=np.float32)
+                [ 0.0, 617.5625, 244.1013], 
+                [ 0.0, 0.0, 1.0]], dtype=np.float32)
+
     distCoeffs = np.zeros((4, 1)) # Assuming no lens distortion
 
     # --- Placeholder for Camera Extrinsic Parameters ---
