@@ -41,7 +41,6 @@ class TopomapCreatorNode(Node):
         self.subgoals_pub = self.create_publisher(Image, '/subgoals', 10)
         # Subscriber to joystick topic
         # self.create_subscription(Joy, "joy", self.callback_joy, 10)
-        self.create_subscription(Twist, "teleop/keyboard", self.callback_teleop, 10)
 
         # Timer to check for inactivity
         self.create_timer(self.dt, self.timer_callback)
@@ -56,10 +55,6 @@ class TopomapCreatorNode(Node):
     def callback_obs(self, msg: Image):
         global obs_img
         self.obs_img = msg_to_pil(msg)
-
-    def callback_teleop(self, msg: Twist):
-        if msg.linear.x == 0.0 and msg.linear.y == 0.0 and msg.linear.z == 0.0 and msg.angular.x == 0.0 and msg.angular.y == 0.0 and msg.angular.z == 0.0:
-            rclpy.shutdown()
 
     def timer_callback(self):
         global obs_img
@@ -76,7 +71,7 @@ class TopomapCreatorNode(Node):
 
 
 def main(args: argparse.Namespace):
-    rclpy.init(args=args)
+    rclpy.init()
 
     topomap_creator_node = TopomapCreatorNode(args.dir, args.dt)
 
